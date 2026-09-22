@@ -112,7 +112,7 @@ embedding into positive/negative parts before hashing (`x⁺ = max(x,0)`,
 non-negativity-assuming algorithms to signed data, and may recover
 FlyHash's advantage even on dense sentence embeddings.
 
-## Honest findings (this matters more than a clean win for a resume project)
+## Honest findings (this matters more than a clean win)
 
 1. **FlyHash's advantage over SimHash depends on a specific input
    condition — non-negative, redundant features — not on "being
