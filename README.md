@@ -194,10 +194,4 @@ though that fact was never mentioned in that turn — it has to call
       results table, and what you'd do with more time — this is the
       artifact to link from your resume/portfolio.
 
-## Why this is worth having on a resume
 
-It demonstrates: implementing a research algorithm from a paper rather
-than calling a library, building a fair experimental comparison instead
-of a rigged demo, and being precise about when a bio-inspired method does
-and doesn't help — which is a more credible signal to an interviewer than
-a benchmark table with only wins in it.
