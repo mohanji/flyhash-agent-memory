@@ -36,6 +36,7 @@ src/
   digits_embeddings.py Real image loader (sklearn digits, MNIST stand-in — see Phase 2b)
   mnist_embeddings.py  Full MNIST loader via OpenML (run on a machine with internet)
   grid_search.py       Sparsity x pool-size hyperparameter ablation (Phase 2c)
+  latency_memory_benchmark.py  Post-fix memory/latency numbers under the corrected protocol
   real_embeddings.py   Real sentence-transformers loader (100 unique sentences, 5 topics)
   real_text_proxy.py   Offline stand-in using TF-IDF over real text (no network needed)
   agent_memory.py      Text-in/text-out memory wrapper: embeds + calls FlyMemoryStore
@@ -309,6 +310,71 @@ python grid_search.py --dataset glove --bits 16
 python grid_search.py --dataset glove --bits 256
 ```
 
+## Memory and query-latency: a real, honest limitation (post-fix numbers)
+
+Every result above measures hash *quality* (mAP) — none of it measures
+memory footprint or query speed under the corrected protocol. The only
+memory/latency numbers previously in this README (`benchmark.py`'s bucket
+vs. scan vs. FAISS table) predate the Phase 1 fix and used the old,
+already-superseded comparison design. `latency_memory_benchmark.py` fills
+that gap honestly, and the result is **not** a clean win for FlyHash —
+it's a real finding worth understanding before this goes in a paper.
+
+**GloVe (5000 records, dim=100), 50 queries, brute-force ranking for
+everything (no ANN index on either side):**
+
+| k (bits) | SimHash packed bytes/record | mem reduction vs. float32 | FlyHash ms/query | SimHash ms/query | speedup vs. exact L2 |
+|---|---|---|---|---|---|
+| 16  | 2  | 200.0x | 14.05 | 0.19 | 4.0x |
+| 32  | 4  | 100.0x | 12.76 | 0.29 | 2.7x |
+| 64  | 8  | 50.0x  | 12.93 | 0.45 | 1.8x |
+| 128 | 16 | 25.0x  | 14.15 | 0.84 | 0.9x |
+| 256 | 32 | 12.5x  | 13.17 | 2.17 | 0.4x |
+
+(Exact float32 L2 baseline: 400 bytes/record, 0.782 ms/query.)
+
+**What this shows, plainly:**
+
+- **SimHash's k-bit code is exactly k bits** — pack it, compare it via a
+  cheap matmul, and at small k it's both far smaller (200x less memory at
+  k=16) and faster than brute-force exact search. That part is the
+  expected, well-known benefit of compact hashing.
+- **FlyHash's code is NOT k bits — it's `pool_size` (2000) bits, of which
+  only k are ever set to 1.** The Hamming-ranking implementation used
+  throughout this project (`vectorized_hamming_ranking`, a single matmul)
+  compares the *full* 2000-wide array regardless of k, because that's how
+  the code is represented in memory (dense binary array, not a sparse
+  index list). That means FlyHash's dense-packed size is a fixed 250
+  bytes/record **regardless of k** (worse than SimHash's k-bit code at
+  every k except k≈250+), and its brute-force query time is a fairly flat
+  ~13ms/query regardless of k — **10-70x slower than SimHash at the same
+  k**, and slower than even the naive exact-L2 baseline.
+
+**Why this doesn't contradict the mAP results, and what it does mean:**
+mAP only depends on *which* k bits are set, not on how the code is stored
+or compared — so the quality results (FlyHash wins decisively) and the
+resource results (FlyHash, compared densely, costs more) are both true at
+once, about different things. FlyHash's real memory advantage requires
+storing only the k *active indices* rather than the full pool as a dense
+bit array — `memory_store.py` already does exactly this (sparse
+index-list storage), which is much closer to SimHash's footprint in
+practice. But *speed* is the harder problem: comparing two sparse index
+sets efficiently needs either an inverted index (this project's
+`memory_store.py` "bucket" mode attempts exactly this, and was already
+found — see the Honest Findings below — to not be truly sublinear at
+tested scale) or a different comparison algorithm entirely (e.g., set
+intersection rather than dense Hamming distance). **This project has not
+solved that problem.** The honest conclusion: FlyHash's advantage
+demonstrated here is a *quality-per-bit* advantage, not (yet) a
+demonstrated memory-or-speed-per-query advantage in this implementation —
+closing that gap is real, unsolved future work, not a footnote.
+
+Run it yourself:
+```bash
+cd src
+python latency_memory_benchmark.py --dataset glove
+```
+
 ## Honest findings (this matters more than a clean win for a resume project)
 
 1. **A real, reproducible discrepancy with a published result was found,
@@ -324,11 +390,20 @@ python grid_search.py --dataset glove --bits 256
    plausible-sounding story (FlyHash needs non-negative redundant data)
    built entirely on a methodological bug. That's a useful lesson for
    evaluating any hashing/retrieval benchmark, not just this one.
-3. **Memory savings are real but modest at these settings** — the actual
-   payoff scales with how large you can push `hash_dim` while keeping the
-   *number* of active bits `k` small and fixed (bigger dictionary, same
-   sparse budget), which needs a real, higher-dimensional embedding
-   (e.g. 384-dim sentence embeddings) to show convincingly.
+3. **A quality win is not automatically a memory-or-speed win, and this
+   project's own numbers prove it against itself** — FlyHash beats SimHash
+   decisively on retrieval quality (mAP) at every bit budget, dataset, and
+   hyperparameter setting tested, full stop. But measured honestly under
+   the same dense, brute-force comparison used throughout, FlyHash's code
+   is *larger and slower to compare* than SimHash's at equal quality-bits
+   `k`, because FlyHash's code lives in a much wider space (`pool_size`,
+   e.g. 2000) of which only `k` bits are active, while the comparison
+   implementation used here doesn't exploit that sparsity. Realizing
+   FlyHash's memory/speed potential needs a sparse-aware storage and
+   comparison scheme (partially present in `memory_store.py`, not yet
+   proven sublinear) — an unsolved problem, not a minor footnote. Reporting
+   only the quality win while staying quiet about this would be a
+   cherry-picked story of exactly the kind this project set out to avoid.
 
 ## Agent integration (Day 4)
 
@@ -407,9 +482,18 @@ though that fact was never mentioned in that turn — it has to call
       something to omit.
 - [ ] **Phase 4 — arXiv preprint.**
 - [ ] **Phase 5 — ACM XRDS or a workshop**, using the arXiv version as the base.
-- [ ] Implement real multi-probe/banded LSH indexing on top of the sparse
-      codes to get actual sublinear query time at scale (this is the
-      piece needed before claiming a latency win over FAISS).
+- [x] **Fresh post-fix memory/latency benchmark.** Resolved: measured
+      honestly under the corrected protocol (`latency_memory_benchmark.py`)
+      rather than reusing pre-fix numbers. Result is a real limitation, not
+      a win: FlyHash's dense-packed code is larger and slower to
+      brute-force-compare than SimHash's at equal `k`, because the
+      comparison implementation doesn't exploit FlyHash's sparsity. See
+      the "Memory and query-latency" section above for the full numbers
+      and explanation.
+- [ ] Implement real multi-probe/banded LSH indexing, or a sparse
+      index-set comparison, on top of the sparse codes to get actual
+      sublinear/faster query time at scale — this is now a clearly-scoped,
+      still-open problem (see above), not an assumed win.
 - [x] Wire `FlyMemoryStore` into an actual agent loop (`agent_memory.py` +
       `agent_demo.py`, Claude API tool-use) — demonstrated cross-turn
       recall of facts shared earlier in a conversation.

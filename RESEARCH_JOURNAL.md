@@ -470,6 +470,67 @@ in the current claim, but places to extend it later.
 
 ---
 
+## Stage 12: honest memory/latency numbers, and an uncomfortable finding
+
+**Issue.** While outlining the Phase 3 paper, it became clear the only
+memory/latency numbers anywhere in this project (`benchmark.py`'s
+bucket/scan/FAISS table) predate the Phase 1 fix and use the old,
+already-superseded comparison design. A paper reporting the corrected mAP
+results couldn't honestly cite pre-fix resource numbers alongside them —
+they measure a configuration that's already been shown to be flawed.
+
+**Investigation.** Built `latency_memory_benchmark.py` to measure, under
+the exact corrected protocol used everywhere else in Phase 2 (fixed `k`,
+large fixed pool `m`, real GloVe data): packed memory per record and
+brute-force query latency, for both FlyHash and SimHash at equal `k`,
+against an exact-float32-L2 baseline. Expected this to mostly confirm
+FlyHash's practical benefits alongside its already-proven quality
+advantage. It did not.
+
+Digging into why: `vectorized_hamming_ranking` (used throughout this
+project for all Hamming-distance ranking, including every mAP result
+reported so far) does a single matmul over the full code width. For
+SimHash, code width = k (e.g. 16, 64, 256). For FlyHash, code width =
+`pool_size` (always 2000 in this project, e.g. via `flyhash_pool_size`),
+regardless of k — only k of those 2000 bits are ever set to 1, but the
+implementation stores and compares the full dense 2000-wide array. That
+means FlyHash's packed memory is a flat ~250 bytes/record no matter what
+k is (worse than SimHash's k-bit code at every k up to ~250), and its
+brute-force query time is a roughly flat ~13ms/query regardless of k —
+10-70x slower than SimHash at the same k, and slower than the naive
+exact-L2 baseline entirely.
+
+**Resolution — and the honest framing that matters here.** This is not a
+bug to fix quietly; it's a real, structural fact about the current
+implementation that needed reporting alongside the quality results, not
+instead of investigating further before writing anything. Key points
+worked out:
+- mAP (quality) only depends on *which* k bits are set, so it's completely
+  unaffected by how the code is stored/compared — the Phase 1/2 quality
+  results all stand exactly as reported.
+- Memory *can* be recovered by storing only the k active indices (a sparse
+  index-list) instead of the dense 2000-bit array — `memory_store.py`
+  already does this for actual storage, so real deployed memory is much
+  closer to SimHash's footprint than this benchmark's dense-packing number
+  suggests.
+- Speed is the harder, still-unsolved half: comparing sparse index sets
+  efficiently needs either a real sublinear index (the "bucket" mode in
+  `memory_store.py` was already found, back in Stage 2, to not be
+  genuinely sublinear at tested scale) or a fundamentally different
+  comparison approach (set intersection instead of dense Hamming
+  distance) — neither has been built or demonstrated in this project.
+
+**Why this stays in, not gets buried.** The project's whole premise has
+been "honest science over a clean demo." A quality win is genuinely
+valuable and fully real — but claiming or implying a memory/speed win
+alongside it, when the actual measured numbers show FlyHash costing MORE
+under this project's own comparison code, would be exactly the kind of
+overclaiming this project has spent 11 stages catching and correcting in
+itself. This goes in the paper as a named, scoped limitation and an
+explicit direction for future work, not a footnote.
+
+---
+
 ## Lessons learned (so far)
 
 1. **A hypothesis that fits the data isn't the same as a hypothesis that's
@@ -502,3 +563,10 @@ in the current claim, but places to extend it later.
    from a state that doesn't assume anything left over from a previous
    session — this is exactly the kind of gap a reviewer or a future
    collaborator would hit immediately.
+7. **A win on one axis (quality) says nothing about another axis (memory,
+   speed) — measure each one separately, honestly, and don't let one
+   borrow credibility from the other.** It would have been easy to write
+   "FlyHash wins" once and let that imply it wins on every dimension.
+   Measuring memory/latency directly, after quality was already
+   well-established, surfaced a real cost that the quality numbers alone
+   would never have revealed.
