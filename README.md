@@ -24,13 +24,16 @@ compared against in the literature (`SimHash`, random-hyperplane LSH).
 ## Project layout
 
 ```
+RESEARCH_JOURNAL.md  Chronological account of issues faced, diagnoses, and fixes
 src/
   flyhash.py          FlyHash + SimHash implementations
   memory_store.py     Agent-memory-store wrapper (FlyHash-backed + FAISS baseline)
   benchmark.py         End-to-end memory-store benchmark (recall / latency / memory)
   recall_vs_bits.py    Corrected equal-hash-length FlyHash vs SimHash comparison
   map_metric.py        Mean Average Precision @ R, the literature-standard metric
+  multi_seed_benchmark.py  Reruns recall_vs_bits.py's protocol across N seeds, reports mean +/- std
   glove_embeddings.py  Real GloVe vector loader (used to find & fix the Phase 1 bug)
+  digits_embeddings.py Real image loader (sklearn digits, MNIST stand-in — see Phase 2b)
   real_embeddings.py   Real sentence-transformers loader (100 unique sentences, 5 topics)
   real_text_proxy.py   Offline stand-in using TF-IDF over real text (no network needed)
   agent_memory.py      Text-in/text-out memory wrapper: embeds + calls FlyMemoryStore
@@ -113,6 +116,82 @@ project's earlier stage was incorrect** — it was proposed to explain a gap
 that turned out to be a bug in how the two methods were being compared,
 not a genuine property of either algorithm.
 
+## Phase 2a: statistical rigor — is the GloVe result robust to random seed?
+
+Every number above came from a single random draw of the projection
+matrices. FlyHash's sparse projection and SimHash's random hyperplanes are
+both randomly initialized, so one run only tells you what happened with one
+seed, not whether the gap is real or just a lucky draw. `multi_seed_benchmark.py`
+reruns the exact same corrected protocol across 10 random seeds (only the
+projection matrices vary — the dataset and the fixed query sample stay the
+same across seeds, so all the measured variation is attributable to
+projection-matrix randomness, not to which queries got sampled).
+
+**GloVe (glove-wiki-gigaword-100, 5000 words), mAP@100, mean ± std over 10 seeds:**
+
+| k (bits) | FlyHash mAP@100 | SimHash mAP@100 | gap > 2×combined std? |
+|---|---|---|---|
+| 16  | **0.196 ± 0.007** | 0.047 ± 0.006 | YES |
+| 32  | **0.314 ± 0.009** | 0.096 ± 0.009 | YES |
+| 64  | **0.449 ± 0.008** | 0.185 ± 0.008 | YES |
+| 128 | **0.585 ± 0.006** | 0.316 ± 0.006 | YES |
+| 256 | **0.705 ± 0.006** | 0.469 ± 0.007 | YES |
+
+The result holds. Standard deviation is small (0.006–0.009) at every bit
+budget, and the FlyHash–SimHash gap clears twice the combined standard
+deviation by a wide margin in every case — this is not an artifact of one
+lucky projection matrix. (The single-seed numbers in the Phase 1 table above
+differ slightly from the seed-0 slice of this table only because Phase 1
+used a fixed `seed=42` default rather than `seed=0`; the qualitative picture
+— and the size of the gap — is unchanged either way.) The same check on
+synthetic clustered data (5 seeds, 2000 records) shows the same pattern:
+small std, gap far exceeding 2×combined std at every bit budget.
+
+Run it yourself:
+```bash
+cd src
+python multi_seed_benchmark.py --dataset glove --seeds 10
+python multi_seed_benchmark.py --dataset synthetic --seeds 10
+```
+
+## Phase 2b: a second real dataset — sklearn's `digits` (real images, not text)
+
+GloVe is word vectors; everything so far has been text-shaped data. To
+check the result isn't specific to text embeddings, the same corrected
+protocol was run on `sklearn.datasets.load_digits()` — 1797 real handwritten
+digit images (8x8 = 64 pixel dims each, from the UCI ML hand-written digits
+dataset). This is a genuine image dataset, not a synthetic one, chosen
+because full MNIST (60,000 28x28 images) isn't reachable from this sandbox:
+every MNIST hosting source tried (OpenML, Google Cloud Storage, S3) is
+blocked by the same network restriction that blocked HuggingFace for
+`real_embeddings.py`, and no verified GitHub-hosted MNIST mirror was found
+to point at instead of guessing at URLs. **This is not full MNIST** — see
+the note in `digits_embeddings.py` and the Roadmap below for the pending
+full-MNIST run.
+
+**sklearn digits (1797 images, dim=64), mAP@50, mean ± std over 10 seeds:**
+
+| k (bits) | FlyHash mAP@50 | SimHash mAP@50 | gap > 2×combined std? |
+|---|---|---|---|
+| 16  | **0.456 ± 0.015** | 0.119 ± 0.031 | YES |
+| 32  | **0.593 ± 0.010** | 0.236 ± 0.039 | YES |
+| 64  | **0.699 ± 0.011** | 0.397 ± 0.023 | YES |
+| 128 | **0.748 ± 0.005** | 0.535 ± 0.021 | YES |
+| 256 | **0.806 ± 0.007** | 0.664 ± 0.009 | YES |
+
+Same shape as GloVe: FlyHash wins decisively and robustly at every bit
+budget, and the relative advantage is largest at the smallest bit budgets
+(FlyHash is ~3.8x SimHash at k=16, ~1.2x at k=256) — the same "biggest win
+where it matters most" pattern, now confirmed on a second, structurally
+different real dataset (dense pixel intensities instead of word co-occurrence
+vectors).
+
+Run it yourself:
+```bash
+cd src
+python multi_seed_benchmark.py --dataset digits --n_docs 1797 --n_queries 150 --seeds 10 --R 50
+```
+
 ## Honest findings (this matters more than a clean win for a resume project)
 
 1. **A real, reproducible discrepancy with a published result was found,
@@ -179,11 +258,22 @@ though that fact was never mentioned in that turn — it has to call
       fixed on both synthetic and real GloVe data; `real_embeddings.py`
       still needs the corrected protocol run on it on a machine with
       internet access (see Phase 1 section above for the exact numbers).
-- [ ] **Phase 2 — real benchmark datasets + statistical rigor**: add SIFT1M
-      or MNIST as a second established benchmark beyond GloVe; run 5-10
-      random seeds per configuration and report mean ± std; grid-search
-      `sparsity` and the FlyHash pool size `m` rather than using the fly's
-      own fixed ratios untuned.
+- [x] **Phase 2a — statistical rigor: multi-seed harness.** Resolved: the
+      Phase 1 GloVe result (and the synthetic-data result) hold up across
+      10 random seeds each, with small std (0.006–0.009 mAP) and the
+      FlyHash–SimHash gap clearing 2×combined std at every bit budget
+      tested — see the Phase 2a section above for the full table.
+- [x] **Phase 2b — a second real dataset.** Resolved: sklearn's `digits`
+      dataset (real images, 1797 samples, 8x8 pixels) shows the same
+      pattern as GloVe — FlyHash wins robustly at every bit budget tested,
+      with the largest relative advantage at the smallest budgets. Full
+      MNIST (60k images, 28x28) is still pending: unreachable from this
+      sandbox (OpenML/GCS/S3 all blocked; no verified GitHub mirror found),
+      needs to be run on a machine with internet access using the same
+      `load_embeddings(...)` interface (`digits_embeddings.py` documents
+      the swap). SIFT1M also still pending as a third dataset.
+- [ ] Grid-search `sparsity` and the FlyHash pool size `m` rather than
+      using the fly's own fixed ratios untuned.
 - [ ] **Phase 3 — write it up properly**, with a real Related Work section
       (DenseFly, BioHash, FlyNN, the existing `flyhash` PyPI package) and
       an honest account of the Phase 1 investigation, including the
