@@ -20,8 +20,7 @@ import time
 import numpy as np
 
 from flyhash import FlyHash, SimHash
-#from benchmark import load_embeddings
-from real_embeddings import load_embeddings
+from benchmark import load_embeddings
 
 
 def vectorized_hamming_ranking(codes: np.ndarray, queries: np.ndarray) -> np.ndarray:
@@ -52,34 +51,46 @@ def recall_at_k_from_ranking(pred_dists, exact_dists, k=10):
     return float(np.mean(recalls))
 
 
-def run(n_docs=100, embed_dim=128, n_queries=50, k=10,
-        bit_budgets=(128, 256, 512, 1024, 2048)):
+def run(n_docs=5000, embed_dim=128, n_queries=200, k=10,
+        bit_budgets=(16, 32, 64, 128, 256), flyhash_pool_size=2000):
+    """
+    CORRECTED comparison protocol (fixed after diffing against the official
+    Fly-LSH reference implementation, github.com/dataplayer12/Fly-LSH).
+
+    The original paper's fair comparison holds the number of WINNING bits
+    (hash_length, here `bit_budgets`) equal between FlyHash and conventional
+    LSH — NOT the total hash dimensionality. FlyHash's `embedding_size`
+    (the Kenyon-cell pool winners are chosen from, `flyhash_pool_size`) is a
+    SEPARATE, much larger parameter, independent of the bit budget being
+    swept. An earlier version of this script swept `hash_dim` directly while
+    holding `wta_percent` fixed, which silently varied FlyHash's *effective*
+    code length (its number of active bits) far below the number of bits
+    SimHash was given at the same nominal "hash_dim" — an apples-to-oranges
+    comparison that made FlyHash look uniformly worse than SimHash across
+    every dataset tested (synthetic, TF-IDF, real sentence and GloVe
+    embeddings) until this was caught and fixed. See README's "Phase 1"
+    section for the full account.
+    """
     texts, embeddings = load_embeddings(n_docs, embed_dim, n_clusters=50)
-    # Use the embeddings' ACTUAL dimensionality, not the requested embed_dim —
-    # some loaders (e.g. real_embeddings.py's sentence-transformers loader)
-    # ignore embed_dim because the model fixes its own output size (384 for
-    # MiniLM-L6-v2), so trusting the parameter instead of the real shape
-    # causes a matmul dimension mismatch in FlyHash/SimHash construction.
     actual_dim = embeddings.shape[1]
 
     rng = np.random.default_rng(1)
     query_idx = rng.choice(len(texts), size=n_queries, replace=False)
     queries = embeddings[query_idx]
 
-    # Ground truth: exact L2 nearest neighbors on the original dense embeddings.
     diffs = queries[:, None, :] - embeddings[None, :, :]
-    exact_dists = np.linalg.norm(diffs, axis=2)  # (q, n)
+    exact_dists = np.linalg.norm(diffs, axis=2)
 
-    print(f"{'bits':>6} | {'FlyHash recall@'+str(k):>16} | {'SimHash recall@'+str(k):>16} "
+    print(f"{'k (bits)':>9} | {'FlyHash recall@'+str(k):>18} | {'SimHash recall@'+str(k):>18} "
           f"| {'Fly build(s)':>12} | {'Sim build(s)':>12}")
-    print("-" * 75)
+    print("-" * 80)
 
     results = []
     for bits in bit_budgets:
-        # FlyHash: expand into `bits` Kenyon cells, ~5% winner-take-all,
-        # each cell wired to ~10% of the input dims (matches the fly's ratios).
+        wta_percent = bits / flyhash_pool_size
         t0 = time.perf_counter()
-        fly = FlyHash(actual_dim, hash_dim=bits, sparsity=0.10, wta_percent=0.05)
+        fly = FlyHash(actual_dim, hash_dim=flyhash_pool_size, sparsity=0.10,
+                       wta_percent=wta_percent)
         fly_codes = fly.hash(embeddings)
         fly_queries = fly.hash(queries)
         fly_time = time.perf_counter() - t0
@@ -96,7 +107,7 @@ def run(n_docs=100, embed_dim=128, n_queries=50, k=10,
         fly_recall = recall_at_k_from_ranking(fly_dists, exact_dists, k)
         sim_recall = recall_at_k_from_ranking(sim_dists, exact_dists, k)
 
-        print(f"{bits:>6} | {fly_recall:>16.3f} | {sim_recall:>16.3f} "
+        print(f"{bits:>9} | {fly_recall:>18.3f} | {sim_recall:>18.3f} "
               f"| {fly_time:>12.3f} | {sim_time:>12.3f}")
         results.append({"bits": bits, "flyhash_recall": fly_recall,
                          "simhash_recall": sim_recall})
