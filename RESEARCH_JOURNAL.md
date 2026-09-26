@@ -365,6 +365,111 @@ papers' tables will want the real 60k/28x28 result, not the 1797/8x8 stand-in.
 
 ---
 
+## Stage 10: closing the sandbox gaps — real MiniLM and full MNIST, run on the user's own machine
+
+**Issue.** Two open items had been sitting in the docs since Phase 1/2b,
+both caused by the same root constraint: the sandbox environment this
+project has mostly been developed in has a narrow network allowlist (GitHub
+and package registries only), which blocked (1) verifying the corrected
+protocol against real `all-MiniLM-L6-v2` sentence embeddings
+(`real_embeddings.py` needs to hit huggingface.co), and (2) full MNIST
+(every hosting source tried — OpenML, Google Cloud Storage, S3 — was
+blocked; `digits_embeddings.py`'s sklearn `digits` dataset was used as an
+honestly-labeled stand-in). Both were explicitly flagged as "needs a
+machine with internet access" rather than worked around.
+
+**Investigation/resolution.** Rather than keep guessing at sandbox
+workarounds, the two loaders were wired into `multi_seed_benchmark.py`'s
+dataset dispatcher (`--dataset real` for MiniLM, `--dataset mnist` for full
+MNIST via a new `mnist_embeddings.py` using `sklearn.datasets.fetch_openml`),
+and the user ran both directly on their own machine, which has real
+internet access and a HuggingFace account. Two commands, no sandbox
+involved:
+
+```
+python multi_seed_benchmark.py --dataset real --n_docs 100 --n_queries 30 --R 20 --seeds 10
+python multi_seed_benchmark.py --dataset mnist --n_docs 5000 --n_queries 200 --R 100 --seeds 10
+```
+
+**Results.**
+
+- **Real MiniLM sentence embeddings** (100 unique sentences, dim=384,
+  mAP@20, 10 seeds): FlyHash beat SimHash robustly at every bit budget
+  (e.g. k=64: 0.537±0.030 vs. 0.355±0.024). This is the exact embedding
+  model `agent_memory.py` uses in the actual agent-memory demo, so this
+  result directly validates the piece of the project that matters most for
+  the "does this help a real LLM agent" claim, not just an abstract
+  benchmark dataset.
+- **Full MNIST** (5000 images, dim=784, mAP@100, 10 seeds): same pattern
+  again (e.g. k=64: 0.469±0.011 vs. 0.237±0.014), and this is the literal
+  benchmark the original paper and BioHash/DenseFly report against — no
+  longer a stand-in.
+
+**What this closes.** Every real dataset now attempted (GloVe, MiniLM
+sentence embeddings, sklearn digits, full MNIST) — four independent,
+structurally different sources of real data across two modalities (text,
+images) — shows the identical qualitative pattern: FlyHash beats SimHash
+robustly at every bit budget, with the relative advantage largest exactly
+where bit budgets are smallest. At this point the finding has been checked
+enough different ways that the honest conclusion is: this is very unlikely
+to be a fluke of any one dataset, sandbox limitation, or evaluation choice.
+Remaining Phase 2 items are optional breadth (SIFT1M as a fifth dataset,
+hyperparameter grid search), not core validation — Phase 3 (write-up) is
+now a reasonable next step whenever ready.
+
+---
+
+## Stage 11: Phase 2c — hyperparameter grid search, and deciding to skip SIFT1M
+
+**Issue.** Every result up to this point used the same fixed defaults
+(`sparsity=0.10`, `flyhash_pool_size=2000`) without ever testing whether the
+FlyHash-over-SimHash result depended on those specific choices. Before
+Phase 3 (write-up), this was the last real question standing between "this
+result holds for the settings I happened to pick" and "this result holds
+across the reasonable range of settings" — exactly the question a paper
+reviewer would ask first.
+
+There was also a live decision to make about SIFT1M: the original paper's
+benchmark suite is roughly SIFT + GloVe + MNIST, so adding SIFT1M would
+complete an exact-replication set. Weighed against that: SIFT1M is ~1M
+128-dim vectors (~500MB, not GitHub-hosted, so likely another sandbox-block
+situation requiring the user's own machine again), and to keep it tractable
+it would need subsampling anyway — the same treatment already given to
+GloVe and MNIST (5000-record samples). A subsampled 5th dataset, on top of
+four already-confirmed real, structurally different datasets across two
+modalities (text: GloVe, MiniLM; images: digits, MNIST), was judged to add
+breadth without adding meaningfully to the evidence. Decided to skip it and
+note it as explicit future work rather than chase a fifth confirmation of a
+pattern that four independent datasets had already established.
+
+**Investigation.** Built `grid_search.py`, which fixes a bit budget `k` and
+sweeps `sparsity ∈ {0.05, 0.10, 0.20}` × `pool_size ∈ {500, 1000, 2000, 4000}`
+(12 combinations), reporting FlyHash's mAP@100 (mean ± std over 3 seeds —
+fewer than the 10-seed main harness, deliberately, since this sweeps many
+more configurations and the goal is checking whether the qualitative
+pattern survives everywhere, not producing a fresh publication-grade number
+per cell) against the fixed SimHash baseline at the same k. Ran this at
+three bit budgets (16, 64, 256) to check the low, middle, and high end of
+the range already reported — 36 configurations total.
+
+**Resolution.** All 36 configurations beat the SimHash baseline at their
+respective bit budget. No combination of sparsity and pool size flipped the
+result. Two secondary patterns worth a note (not a redesign): higher
+sparsity (0.20, above the fly's own biological ~0.10-0.12 ratio) does
+slightly better at larger bit budgets, and pool size stops mattering much
+once it's a few times larger than the bit budget — the jump from m=2000 to
+m=4000 rarely helps and occasionally hurts slightly.
+
+**Conclusion.** The result isn't a hyperparameter accident. Combined with
+the multi-seed statistical check (Stage 8) and the four-dataset replication
+(Stages 5, 9, 10), this is now checked along every axis a reviewer would
+reasonably ask about before Phase 3 (write-up): random seed, dataset,
+modality, and hyperparameter choice. SIFT1M and further hyperparameter
+tuning remain as explicit, deliberately-deferred future work — not gaps
+in the current claim, but places to extend it later.
+
+---
+
 ## Lessons learned (so far)
 
 1. **A hypothesis that fits the data isn't the same as a hypothesis that's

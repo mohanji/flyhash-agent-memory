@@ -1,34 +1,15 @@
-# Python
 __pycache__/
-*.py[cod]
-*.egg-info/
-.eggs/
-*.egg
-build/
-dist/
-
-# Virtual environments
+*.pyc
 venv/
 .venv/
-env/
+*.egg-info/
+.pytest_cache/
 
-# Jupyter
-.ipynb_checkpoints/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# IDE
-.vscode/
-.idea/
-
-# Model caches (sentence-transformers downloads here)
-.cache/
-*.pt
-*.bin
-
-# Local data/artifacts you generate while experimenting
-*.log
-/data/
-/results/
+# Downloaded/cached data — regenerated automatically on first run, not
+# something to version. GloVe (via gensim) and MNIST (via fetch_openml)
+# each cache themselves outside this repo (~/gensim-data, ~/scikit_learn_data)
+# so nothing large should ever land here, but excluding just in case.
+*.csv
+*.npz
+*.gz
+data/
