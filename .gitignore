@@ -4,6 +4,7 @@ venv/
 .venv/
 *.egg-info/
 .pytest_cache/
+paper/
 
 # Downloaded/cached data — regenerated automatically on first run, not
 # something to version. GloVe (via gensim) and MNIST (via fetch_openml)
