@@ -26,10 +26,11 @@ is close to copy-paste, not a rewrite.
 - One sentence: what was validated (4 datasets, 2 modalities, 10 seeds,
   36 hyperparameter configs) and the headline result (robust win, largest
   at the smallest bit budgets).
-- One sentence: the honest limitation — measured under a brute-force
-  comparison, FlyHash's quality advantage does not (yet) translate into a
-  memory or speed advantage over SimHash; that gap is scoped as future
-  work, not oversold or hidden.
+- One sentence: the honest limitation — a naive brute-force comparison
+  shows FlyHash's quality advantage does not translate into a memory or
+  speed advantage over SimHash; a sparse-set comparison we also tried
+  partially closes the speed gap but not the memory gap, so this remains
+  an open, precisely-scoped trade-off rather than a solved or hidden issue.
 
 ## 1. Introduction
 
@@ -143,11 +144,23 @@ is close to copy-paste, not a rewrite.
   the honest, structural finding — not spun, not buried.
 - Explain why this doesn't undercut Section 4.1's quality results: mAP
   depends only on which k bits are set, not on storage/comparison format.
-- Frame as motivating Section 6 (Limitations): the quality advantage is
-  real and robust; converting it into a memory/speed advantage requires a
-  sparse-aware comparison scheme this project has not built.
 
-### 4.4 Agent memory demo
+### 4.4 Closing the gap: a sparse-set comparison (partial success)
+- **Done, real numbers in hand** (`sparse_flyhash_benchmark.py`): every
+  FlyHash code has exactly k active bits, so `hamming(a,b) = 2k -
+  2·intersection(a,b)` — ranking by Hamming distance is mathematically
+  identical to ranking by descending intersection size, computable as a
+  sparse-sparse matrix product over just the k active indices.
+- Result table (dense vs. sparse vs. SimHash ms/query; sparse-index vs.
+  SimHash bytes/record) at all 5 bit budgets.
+- Honest result: recovers most (10-22x) of the speed gap and fixes
+  memory's *scaling behavior* (now scales with k, not flat), but SimHash's
+  small dense k×k matmul is still 2-5x faster, and index-list storage
+  (2 bytes/index) is still ~16x larger than SimHash's bit-packed code.
+  **A genuine partial win, explicitly not oversold as solving the
+  problem.**
+
+### 4.5 Agent memory demo
 - Qualitative: the cross-turn recall transcript (the peanuts/Python
   example) as a figure — this is the "does it actually work for the
   target use case" evidence, separate from the benchmark numbers above.
@@ -157,25 +170,31 @@ is close to copy-paste, not a rewrite.
 - Why is the quality advantage biggest at low bit budgets? (sparse
   expansion preserves more structure per bit than dense projection at the
   same bit count — the intuition from the original paper).
-- The quality/resource split from 4.3 deserves its own paragraph here:
+- The quality/resource split from 4.3-4.4 deserves its own paragraph here:
   this is a case where a hash function can be a clear win on one axis
-  (nearest-neighbor structure preservation) while being neutral-to-worse
-  on another (memory, comparison speed) in a naive implementation — worth
-  discussing as a general point about evaluating hashing schemes, not
-  just as a limitation of this project specifically.
+  (nearest-neighbor structure preservation) while a naive implementation
+  leaves resource costs worse, and even a targeted fix (the sparse-set
+  comparison) only partially closes that gap — worth discussing as a
+  general point about evaluating hashing schemes, not just as a
+  limitation of this project specifically.
 - Practical implication for agent memory: an agent choosing FlyHash today
-  gets better retrieval quality per bit, but should not expect a memory or
-  latency win over a well-implemented SimHash baseline without further
-  work (Section 6).
+  gets meaningfully better retrieval quality per bit; a well-implemented
+  SimHash baseline remains competitive or better on raw memory and speed
+  at the record counts tested here, so the deployment trade-off is
+  quality vs. resource cost, not a strict win either way (Section 6).
 
 ## 6. Limitations and Future Work
 
-- **Memory/speed under brute-force comparison do not (yet) match the
-  quality advantage** — see 4.3. The path to fixing this (sparse
-  index-list storage + a genuinely sublinear comparison, e.g. banded
-  multi-probe LSH or inverted-index lookup) is scoped but not built; the
-  existing "bucket mode" attempt in `memory_store.py` was already found
-  not to be truly sublinear at tested scale.
+- **Memory/speed under brute-force comparison do not fully match the
+  quality advantage, even after a genuine attempt to close the gap** — see
+  4.3-4.4. The sparse-set comparison recovers most of the speed
+  disadvantage and fixes memory's scaling behavior, but SimHash's
+  bit-packed code remains more memory-efficient, and a truly sublinear
+  index (banded multi-probe LSH, or an inverted index proven sublinear at
+  scale — unlike this project's earlier "bucket mode" attempt) is still
+  unbuilt. Concrete next step identified but not attempted: a more compact
+  index encoding (delta-coding sorted indices, variable-length codes, or a
+  smaller pool) to close the remaining memory gap.
 - SIFT1M and further datasets — explicitly deferred, not attempted.
 - Doesn't implement DenseFly's densification or BioHash's learned
   projection — both are natural extensions.

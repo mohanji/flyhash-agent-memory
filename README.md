@@ -37,6 +37,7 @@ src/
   mnist_embeddings.py  Full MNIST loader via OpenML (run on a machine with internet)
   grid_search.py       Sparsity x pool-size hyperparameter ablation (Phase 2c)
   latency_memory_benchmark.py  Post-fix memory/latency numbers under the corrected protocol
+  sparse_flyhash_benchmark.py  Sparse-set comparison follow-up (partial speed win, memory still open)
   real_embeddings.py   Real sentence-transformers loader (100 unique sentences, 5 topics)
   real_text_proxy.py   Offline stand-in using TF-IDF over real text (no network needed)
   agent_memory.py      Text-in/text-out memory wrapper: embeds + calls FlyMemoryStore
@@ -354,20 +355,53 @@ everything (no ANN index on either side):**
 mAP only depends on *which* k bits are set, not on how the code is stored
 or compared — so the quality results (FlyHash wins decisively) and the
 resource results (FlyHash, compared densely, costs more) are both true at
-once, about different things. FlyHash's real memory advantage requires
-storing only the k *active indices* rather than the full pool as a dense
-bit array — `memory_store.py` already does exactly this (sparse
-index-list storage), which is much closer to SimHash's footprint in
-practice. But *speed* is the harder problem: comparing two sparse index
-sets efficiently needs either an inverted index (this project's
-`memory_store.py` "bucket" mode attempts exactly this, and was already
-found — see the Honest Findings below — to not be truly sublinear at
-tested scale) or a different comparison algorithm entirely (e.g., set
-intersection rather than dense Hamming distance). **This project has not
-solved that problem.** The honest conclusion: FlyHash's advantage
-demonstrated here is a *quality-per-bit* advantage, not (yet) a
-demonstrated memory-or-speed-per-query advantage in this implementation —
-closing that gap is real, unsolved future work, not a footnote.
+once, about different things.
+
+### Follow-up experiment: does a sparse-set comparison close the gap?
+
+Since every FlyHash code has *exactly* `k` active bits, there's a neat
+identity: `hamming(a, b) = 2k - 2·|intersection(a, b)|`. Because `k` is
+fixed, ranking by Hamming distance is mathematically identical to ranking
+by descending intersection size — so Hamming ranking can be computed as a
+**sparse-sparse matrix product** (`scipy.sparse`) over just the active
+indices, instead of a dense matmul over the full 2000-wide array.
+`sparse_flyhash_benchmark.py` tries exactly this, as a genuine experiment
+(not a known-answer confirmation):
+
+| k (bits) | sparse idx bytes/rec | SimHash bytes/rec | dense ms/query | sparse ms/query | SimHash ms/query |
+|---|---|---|---|---|---|
+| 16  | 32  | 2  | 15.77 | 0.71 | 0.40 |
+| 32  | 64  | 4  | 14.44 | 0.73 | 0.29 |
+| 64  | 128 | 8  | 14.54 | 1.59 | 0.45 |
+| 128 | 256 | 16 | 15.03 | 3.39 | 0.84 |
+| 256 | 512 | 32 | 13.90 | 8.55 | 1.79 |
+
+**Result: a genuine partial win, not a full close of the gap.**
+- **Speed** improves dramatically over the naive dense comparison — 10 to
+  22x faster — and now correctly *scales with k* instead of being a flat
+  ~14ms regardless of bit budget. But SimHash is still 2-5x faster than
+  FlyHash-sparse at every k: a small dense k×k matmul (what SimHash
+  already uses) beats sparse-matrix overhead at these scales.
+- **Memory** now also scales sensibly with k (32→512 bytes) instead of a
+  flat 250 bytes, a real improvement in behavior — but each active index
+  needs a full 2-byte integer to store, so it's still ~16x larger than
+  SimHash's bit-packed code at the same k. Bit-packing beats index-listing
+  whenever the pool is this size, because storing "which of ~2000
+  positions is on" costs more per bit than a single packed bit does.
+
+**Honest bottom line:** this experiment recovers most of the *speed* gap
+but not the *memory* gap, and doesn't fully close either one relative to
+SimHash. FlyHash's advantage remains a genuine, robustly-validated
+*quality-per-bit* win; converting it into an outright memory-or-speed win
+over a well-implemented SimHash baseline is still open — a real, harder
+problem than initially assumed, and reported here as such rather than
+declared solved because one attempt showed partial improvement.
+
+Run it yourself:
+```bash
+cd src
+python sparse_flyhash_benchmark.py
+```
 
 Run it yourself:
 ```bash
@@ -490,10 +524,20 @@ though that fact was never mentioned in that turn — it has to call
       comparison implementation doesn't exploit FlyHash's sparsity. See
       the "Memory and query-latency" section above for the full numbers
       and explanation.
-- [ ] Implement real multi-probe/banded LSH indexing, or a sparse
-      index-set comparison, on top of the sparse codes to get actual
-      sublinear/faster query time at scale — this is now a clearly-scoped,
-      still-open problem (see above), not an assumed win.
+- [x] **Try a sparse index-set comparison** (`sparse_flyhash_benchmark.py`)
+      to see if it closes the memory/speed gap found above. Resolved with
+      a genuine, non-obvious result: recovers most of the *speed* gap
+      (10-22x faster than the dense comparison, and now scales correctly
+      with `k`) but SimHash's dense k×k matmul is still 2-5x faster;
+      memory now scales correctly with `k` too, but index-list storage
+      (2 bytes/active-bit) is still ~16x larger than SimHash's bit-packed
+      code. A real partial win, not a full close — see the "Follow-up
+      experiment" subsection above.
+- [ ] A genuinely sublinear index (multi-probe/banded LSH, or an inverted
+      index that's actually proven sublinear at scale, unlike this
+      project's earlier "bucket mode" attempt) remains open — the sparse
+      comparison above is faster per-query but still brute-force (compares
+      against every record); real scale needs avoiding that entirely.
 - [x] Wire `FlyMemoryStore` into an actual agent loop (`agent_memory.py` +
       `agent_demo.py`, Claude API tool-use) — demonstrated cross-turn
       recall of facts shared earlier in a conversation.

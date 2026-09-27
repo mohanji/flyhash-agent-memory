@@ -531,6 +531,56 @@ explicit direction for future work, not a footnote.
 
 ---
 
+## Stage 13: trying to close the speed/memory gap — a genuine partial win
+
+**Issue.** Stage 12 found FlyHash's dense-packed comparison to be slower
+and larger than SimHash's at equal `k`, and flagged a sparse-aware
+comparison as the obvious next thing to try. Before accepting that as a
+closed limitation, it was worth actually attempting the fix rather than
+just naming it as future work — a real chance the gap would close, at
+least partially.
+
+**Investigation.** The key fact that makes a sparse comparison possible:
+every FlyHash code has *exactly* k active bits (that's the definition of
+k-winners-take-all), so for two such codes, `hamming(a,b) = 2k -
+2·intersection(a,b)`. Since k is fixed, ranking by Hamming distance is
+mathematically identical to ranking by descending intersection size — so
+the comparison can be done as a sparse-sparse matrix product
+(`scipy.sparse`) over just the k active indices per code, instead of a
+dense matmul over the full pool_size=2000-wide array. Built
+`sparse_flyhash_benchmark.py` to test this directly against the dense
+version and against SimHash, at the same 5 bit budgets on GloVe.
+
+**Resolution.** A real, non-obvious, mixed result:
+- **Speed**: dramatic improvement over the dense comparison (10-22x
+  faster: e.g. at k=16, 15.77ms dense -> 0.71ms sparse), and now correctly
+  *scales with k* rather than being a flat ~14ms regardless of bit budget.
+  But SimHash's own dense k x k matmul is still 2-5x faster than the
+  sparse-intersection approach at every k tested — sparse-matrix format
+  overhead in scipy dominates at these small scales (k up to 256), even
+  though the underlying operation should in principle be cheaper.
+- **Memory**: also now scales correctly with k (32 to 512 bytes) instead
+  of a flat 250 bytes, a real behavioral improvement — but storing each
+  active index costs a full 2-byte integer, so it's still ~16x larger
+  than SimHash's bit-packed k-bit code. Bit-packing is simply a more
+  efficient encoding than storing explicit positions, when the pool is
+  this size (~2000): 1 bit per active position vs. 16 bits per index.
+
+**Conclusion.** This genuinely moves the needle without fully closing it.
+The honest updated claim: a sparse-aware comparison recovers most (not
+all) of FlyHash's speed disadvantage and improves memory's *scaling
+behavior* without matching SimHash's *absolute* memory efficiency. This
+is exactly the kind of finding worth having attempted and reported
+precisely, rather than either (a) not trying and leaving a vaguer "future
+work" note, or (b) overselling a partial result as "solved." A smarter
+index encoding (delta-coding the sorted indices, variable-length codes,
+or reducing the pool size to shrink the index range) might close the
+memory gap further — flagged as the next concrete thing to try if this
+line of investigation continues, not attempted here to avoid an
+open-ended rabbit hole right before the paper write-up.
+
+---
+
 ## Lessons learned (so far)
 
 1. **A hypothesis that fits the data isn't the same as a hypothesis that's
