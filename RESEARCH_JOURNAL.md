@@ -581,6 +581,45 @@ open-ended rabbit hole right before the paper write-up.
 
 ---
 
+## Stage 14: two figures for the paper draft — no new numbers, just visualization
+
+**Issue.** The Phase 3 outline flagged two figures as "worth building" to
+strengthen Sections 4.1 and 4.2 of the draft: a summary plot of FlyHash's
+relative advantage across all four datasets at once, and heatmaps of the
+Phase 2c hyperparameter grid (three text tables read slower than one
+picture). Neither had been built while the draft's prose sections were
+being written.
+
+**Investigation/resolution.** Built `paper/figures/make_figures.py`, which
+transcribes the existing numbers directly from README.md (no new runs, no
+new numbers) and renders:
+
+- **Figure 1** — line plot of the FlyHash/SimHash mAP ratio vs. bit budget,
+  one line per dataset (GloVe, MiniLM, digits, MNIST), with a parity
+  reference line at y=1. Confirms visually that the "biggest win at the
+  smallest bit budget" pattern (Stage 8-10) holds across all four datasets
+  simultaneously, and that MiniLM's curve is flatter (smaller relative
+  advantage throughout) than the other three — a detail easy to miss
+  reading four separate tables but immediately visible in one plot.
+- **Figure 2** — three heatmaps (sparsity x pool_size, colored by mAP) for
+  k=16/64/256 on GloVe, condensing Table 3's three text tables from Stage
+  11. Makes the two secondary hyperparameter patterns (sparsity helps
+  slightly at high k; pool size matters less past ~8x the bit budget)
+  visible at a glance rather than requiring a cell-by-cell read.
+
+One layout bug: the first render of Figure 2 had the shared suptitle
+overlapping the middle panel's own title. Fixed by pushing the panels down
+(`subplots_adjust(top=0.78)`) and moving the suptitle up (`y=1.05`) rather
+than shrinking the panel titles or dropping the shared title.
+
+**Conclusion.** Both figures are referenced inline in `paper/DRAFT.md`
+(Sections 4.1 and 4.2) alongside their existing tables — the tables remain
+the source of truth for exact numbers; the figures are for pattern
+legibility, not a replacement. Saved as both PNG (for quick viewing) and
+PDF (for eventual LaTeX/arXiv inclusion in Phase 4).
+
+---
+
 ## Lessons learned (so far)
 
 1. **A hypothesis that fits the data isn't the same as a hypothesis that's

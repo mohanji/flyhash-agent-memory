@@ -51,25 +51,38 @@ class FlyHash:
         sparsity: float = 0.10,
         wta_percent: float = 0.05,
         seed: int = 42,
+        weight_mode: str = "signed",
     ):
         self.input_dim = input_dim
         self.hash_dim = hash_dim
         self.sparsity = sparsity
         self.wta_percent = wta_percent
         self.k = max(1, int(round(wta_percent * hash_dim)))
+        self.weight_mode = weight_mode
 
         rng = np.random.default_rng(seed)
 
         # Sparse random projection matrix: each of the hash_dim output units
-        # is connected to only `sparsity` fraction of the input dims, with
-        # random +1/-1 weights on those connections (mirrors random,
-        # non-negative-weighted, sparse ORN -> Kenyon cell wiring in the fly;
-        # we allow +/-1 for better separation on continuous embeddings).
+        # is connected to only `sparsity` fraction of the input dims.
+        # weight_mode="signed" (default, used throughout this project's main
+        # results): random +1/-1 weights on those connections, which we use
+        # for better separation on continuous embeddings.
+        # weight_mode="binary": the original paper's literal {0,1} weight
+        # definition (Dasgupta et al., 2017) — kept here specifically to
+        # support the quantitative sensitivity check in
+        # weight_sensitivity_benchmark.py (paper feedback item #7), so the
+        # "signed vs. binary makes no meaningful difference" claim is backed
+        # by numbers, not just a qualitative note.
+        if weight_mode not in ("signed", "binary"):
+            raise ValueError(f"Unknown weight_mode: {weight_mode!r}")
         num_connections = max(1, int(round(sparsity * input_dim)))
         self.projection = np.zeros((hash_dim, input_dim), dtype=np.float32)
         for i in range(hash_dim):
             idx = rng.choice(input_dim, size=num_connections, replace=False)
-            weights = rng.choice([-1.0, 1.0], size=num_connections)
+            if weight_mode == "signed":
+                weights = rng.choice([-1.0, 1.0], size=num_connections)
+            else:  # "binary"
+                weights = np.ones(num_connections, dtype=np.float32)
             self.projection[i, idx] = weights
 
     def hash(self, x: np.ndarray) -> np.ndarray:
