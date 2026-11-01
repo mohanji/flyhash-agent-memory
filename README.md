@@ -29,6 +29,18 @@ protocol, and applies it to retrieval of long-term memories for LLM agents.
 
 ![Results](docs/images/results.png)
 
+## Try it: watch one query get ranked
+
+[![Interactive demo: FlyHash vs SimHash, one query at a time](docs/images/demo.gif)](https://mohanji.github.io/flyhash-agent-memory/demo.html)
+
+Pick a question and a bit budget k, and the demo walks through how each method encodes the question, keeps its k
+strongest units (FlyHash) or k sign bits (SimHash), and ranks stored memories. The rankings are real, computed from the
+released benchmark, and the questions are a fixed random sample, so FlyHash loses some of them and the page shows that.
+
+- **Online:** [open the interactive demo](https://mohanji.github.io/flyhash-agent-memory/demo.html)
+- **Offline:** open `docs/demo.html` in any browser, no install needed.
+- **Regenerate:** `python scripts/make_demo_data.py && python scripts/build_demo.py`
+
 ## Quick start
 
 ```bash
@@ -108,6 +120,8 @@ src/
 datasets/agent_memory_v1/        released benchmark (JSONL)
 tests/                           pytest checks
 scripts/make_figures.py          regenerates docs/images/
+scripts/make_demo_data.py, build_demo.py   regenerate docs/demo.html
+docs/demo.html                   interactive ranking demo (open in a browser)
 docs/EXPERIMENT_LOG.md           full chronological experiment record
 RESEARCH_JOURNAL.md              development notes
 ```
