@@ -44,11 +44,11 @@ def fig_pipeline():
 
     fig, ax = plt.subplots(1, 3, figsize=(12, 3.6), gridspec_kw={"width_ratios": [1, 1.6, 1.6]})
     ax[0].bar(range(d), x, color=MUTED, width=0.8)
-    ax[0].set_title("1  Dense embedding\n(e.g. 32 of 384 dims shown)", fontsize=10)
+    ax[0].set_title("1  Dense embedding\n(32 dims drawn; 384 for MiniLM)", fontsize=10)
     ax[0].set_yticks([]); ax[0].set_xticks([])
 
     ax[1].bar(range(m), act, color=FLY, alpha=0.55, width=1.0)
-    ax[1].set_title("2  Sparse random expansion\neach of 2,000 units samples ~10% of inputs", fontsize=10)
+    ax[1].set_title("2  Sparse random expansion\neach unit samples ~10% of inputs\n(200 units drawn; 2,000 in the experiments)", fontsize=10)
     ax[1].set_yticks([]); ax[1].set_xticks([])
 
     colors = np.where(code > 0, FLY, "#d5dbe3")
@@ -57,7 +57,7 @@ def fig_pipeline():
     ax[2].set_yticks([]); ax[2].set_xticks([])
     for a in ax:
         a.spines["left"].set_visible(False)
-    fig.text(0.5, -0.02, "Similar inputs light up overlapping units, so Hamming distance "
+    fig.text(0.5, -0.02, "Illustration from a random vector. Similar inputs light up overlapping units, so Hamming distance "
              "on the code ranks neighbours. SimHash instead keeps one sign bit per hyperplane.",
              ha="center", fontsize=9.5, color=MUTED)
     fig.tight_layout()
