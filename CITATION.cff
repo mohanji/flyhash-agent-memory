@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "If you use this software or dataset, please cite the paper."
+title: "FlyHash for LLM Agent Memory: An Empirical Validation and a New Application"
+authors:
+  - family-names: Bheemadolu
+    given-names: Mohan
+    email: mohan.bmdl@gmail.com
+  - family-names: Odhiambo
+    given-names: Chrisogonas O.
+    email: chrisogonas.o@outlook.com
+repository-code: "https://github.com/mohanji/flyhash-agent-memory"
+license: MIT
+date-released: 2026-11-01

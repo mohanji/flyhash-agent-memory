@@ -1,0 +1,10 @@
+{
+  "generator": "src/agent_memory_dataset.py::build_dataset",
+  "n_personas": 150,
+  "seed": 0,
+  "n_query_slots_per_persona": 1,
+  "n_memories": 6000,
+  "n_queries": 150,
+  "avg_relevant_per_query": 4.0,
+  "license": "MIT (synthetic template-generated text, no personal data)"
+}

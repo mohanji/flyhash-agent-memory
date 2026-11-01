@@ -1,0 +1,4 @@
+# Optional extras (not needed for the paper's tables)
+sentence-transformers>=2.7   # agent_memory.py (MiniLM embeddings, downloads a model once)
+anthropic>=0.40              # agent_demo.py (interactive Claude chat; needs ANTHROPIC_API_KEY)
+gensim>=4.3                  # glove_embeddings.py (GloVe download via gensim)

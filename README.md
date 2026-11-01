@@ -42,12 +42,28 @@ src/
   real_text_proxy.py   Offline stand-in using TF-IDF over real text (no network needed)
   agent_memory.py      Text-in/text-out memory wrapper: embeds + calls FlyMemoryStore
   agent_demo.py         Terminal chat agent (Claude API) using AgentMemory as a tool
+  offline_demo.py      Network-free demo over the released dataset (no API key)
+  export_dataset.py    Writes the labeled benchmark to datasets/*.jsonl
+datasets/agent_memory_v1/  Released benchmark (memories, queries, labels)
+tests/                 pytest checks (dataset, FlyHash)
+REPRODUCING.md         Paper table -> command map
+```
+
+## Reproducing the paper
+
+The labeled benchmark used in the paper is released in `datasets/agent_memory_v1/`
+(6,000 memories, 150 queries, ground-truth relevance labels). See
+[REPRODUCING.md](REPRODUCING.md) for the table-to-command map, or run:
+
+```bash
+pip install -r requirements.txt
+./reproduce.sh quick
 ```
 
 ## Setup
 
 ```bash
-pip install numpy scikit-learn faiss-cpu
+pip install -r requirements.txt
 cd src
 python3 benchmark.py        # end-to-end memory store demo
 python3 recall_vs_bits.py   # FlyHash vs SimHash, equal bit budget
