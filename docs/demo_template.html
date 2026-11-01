@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlyHash vs SimHash Ranking</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: controls on top, two parallel columns (FlyHash | SimHash) that walk the same four steps, summary strip below. */
+:root{
+  --bg:#f4f6f9; --panel:#ffffff; --ink:#1b2430; --muted:#5d6b7c; --line:#dde3ea;
+  --fly:#0072B2; --fly-soft:#cfe3f2; --sim:#D55E00; --sim-soft:#f6dccb; --good:#17794a; --bad:#a23b2a;
+  --idle:#e6ebf1; --omit:#eef1f5;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f151c; --panel:#171f29; --ink:#e7edf4; --muted:#98a6b6; --line:#2a3544;
+    --fly:#4aa8e6; --fly-soft:#1d3a52; --sim:#f08a3c; --sim-soft:#4a3320; --good:#52c785; --bad:#ef8a78;
+    --idle:#222c39; --omit:#1b2430; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f151c; --panel:#171f29; --ink:#e7edf4; --muted:#98a6b6; --line:#2a3544;
+  --fly:#4aa8e6; --fly-soft:#1d3a52; --sim:#f08a3c; --sim-soft:#4a3320; --good:#52c785; --bad:#ef8a78;
+  --idle:#222c39; --omit:#1b2430; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1120px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:26px;line-height:1.2;margin:0 0 6px;font-weight:600;text-wrap:balance}
+.lede{margin:0 0 18px;color:var(--muted);max-width:68ch}
+.controls{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label,.field .lab{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:0;max-width:100%}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{font:inherit;font-family:var(--mono);background:var(--bg);color:var(--ink);border:0;border-right:1px solid var(--line);padding:8px 14px;cursor:pointer}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+button{cursor:pointer}
+.btn{font:inherit;font-weight:500;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;padding:8px 14px}
+.btn.primary{background:var(--fly);border-color:var(--fly);color:#fff}
+:focus-visible{outline:3px solid var(--fly);outline-offset:2px}
+.steps{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 6px;padding:0;list-style:none}
+.steps button{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:999px;padding:5px 12px}
+.steps button[aria-current="step"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.status{min-height:3em;margin:6px 0 14px;color:var(--ink);max-width:80ch}
+.qbox{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--ink);border-radius:8px;padding:10px 14px;margin:0 0 16px}
+.qbox .lab{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.qbox .q{font-size:18px;font-weight:500}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:820px){.cols{grid-template-columns:1fr}}
+.col{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.col h2{font-size:16px;margin:0 0 2px;font-weight:600;display:flex;align-items:center;gap:8px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.col .sub{margin:0 0 10px;color:var(--muted);font-size:13px}
+canvas{width:100%;display:block;border-radius:6px;background:var(--bg)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted);margin:8px 0 12px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.bits{display:flex;flex-direction:column;gap:6px;margin:0 0 6px}
+.bchunk{display:grid;gap:2px}
+.brow{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:2px}
+.brow span{aspect-ratio:1;border-radius:2px;border:1px solid var(--sim)}
+.brow span.on{background:var(--sim)}
+.brow.match span{border-color:var(--line);background:transparent;aspect-ratio:auto;height:4px;border-radius:2px}
+.brow.match span.eq{background:var(--good);border-color:var(--good)}
+.bitlab{font-size:12px;color:var(--muted);margin:2px 0}
+.list{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.row{display:grid;grid-template-columns:22px 1fr 18px;gap:8px;align-items:start;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:7px 9px;text-align:left;font:inherit;color:var(--ink);width:100%;transition:opacity .25s,transform .25s}
+.row[hidden]{display:none}
+.row.sel{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.row.pre{opacity:0;transform:translateY(6px)}
+.rank{font-family:var(--mono);color:var(--muted);font-size:13px;padding-top:1px}
+.txt{font-size:14px;overflow-wrap:anywhere}
+.meter{height:5px;border-radius:3px;background:var(--idle);margin-top:5px;overflow:hidden}
+.meter b{display:block;height:100%}
+.score{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px}
+.mark{font-weight:700;padding-top:1px}
+.mark.y{color:var(--good)} .mark.n{color:var(--muted)}
+.summary{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+@media (max-width:820px){.summary{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.card .big{font-family:var(--mono);font-size:30px;font-weight:500;line-height:1.1}
+.card .cap{color:var(--muted);font-size:13px}
+.none{font-size:13px;color:var(--bad);padding:2px 4px}
+.note{margin-top:16px;color:var(--muted);font-size:13px;max-width:90ch}
+.note p{margin:0 0 8px}
+.note strong{color:var(--ink)}
+.sr{position:absolute;left:-9999px}
+@media (prefers-reduced-motion: reduce){.row{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>FlyHash vs SimHash, one query at a time</h1>
+  <p class="lede">Real rankings from the released agent-memory benchmark (6,000 stored memories, hashed with the project's own code). Pick a question and a bit budget k, then press Play to watch each method turn text into a code and rank memories with it.</p>
+
+  <div class="controls">
+    <div class="field" style="flex:1 1 320px">
+      <label for="qsel">Question</label>
+      <select id="qsel"></select>
+    </div>
+    <div class="field">
+      <span class="lab" id="klab">Bit budget k</span>
+      <div class="seg" role="group" aria-labelledby="klab" id="kseg"></div>
+    </div>
+    <button class="btn primary" id="play" type="button">Play</button>
+    <button class="btn" id="next" type="button">Next question</button>
+  </div>
+
+  <ol class="steps" id="steps"></ol>
+  <p class="status" id="status" aria-live="polite"></p>
+
+  <div class="qbox"><div class="lab">Question asked of the agent's memory</div><div class="q" id="qtext"></div></div>
+
+  <div class="cols">
+    <section class="col" aria-labelledby="fh">
+      <h2 id="fh"><span class="dot" style="background:var(--fly)"></span>FlyHash</h2>
+      <p class="sub">2,000 units, each wired to a random tenth of the embedding. Keep only the k strongest.</p>
+      <canvas id="grid" role="img" aria-label="Grid of 2,000 units; the k winning units for the question are highlighted"></canvas>
+      <div class="legend" id="glegend"></div>
+      <ul class="list" id="flylist"></ul>
+    </section>
+    <section class="col" aria-labelledby="sh">
+      <h2 id="sh"><span class="dot" style="background:var(--sim)"></span>SimHash</h2>
+      <p class="sub">k random hyperplanes, one sign bit each. No pool, nothing is dropped.</p>
+      <div class="bits" id="bits" role="img" aria-label="Sign bits of the question and of the selected memory"></div>
+      <div class="legend"><span><i style="background:var(--sim)"></i>bit = 1</span><span><i style="border:1px solid var(--sim)"></i>bit = 0</span><span><i style="background:var(--good)"></i>bits agree</span></div>
+      <ul class="list" id="simlist"></ul>
+    </section>
+  </div>
+
+  <div class="summary">
+    <div class="card"><div class="cap">Average precision for this question at k = <span id="sk"></span></div>
+      <div class="big"><span style="color:var(--fly)" id="apf"></span> <span style="color:var(--muted);font-size:18px">FlyHash</span></div>
+      <div class="big"><span style="color:var(--sim)" id="aps"></span> <span style="color:var(--muted);font-size:18px">SimHash</span></div>
+      <div class="cap" style="margin-top:6px">1.00 means every true answer is ranked first. Answers sit at ranks <b id="rf"></b> for FlyHash and <b id="rs"></b> for SimHash.</div></div>
+    <div class="card"><div class="cap">How typical is this?</div>
+      <div id="agg" style="margin-top:4px"></div></div>
+  </div>
+
+  <div class="note">
+    <p><strong>How the questions were chosen.</strong> The 12 questions are a fixed random sample of the 150 benchmark questions, not picked for flattering results. FlyHash does not win every one, and that is visible here. Twelve questions can't settle anything, so the paper's table (150 questions, 10 random seeds) is the evidence.</p>
+    <p><strong>What this does not show.</strong> It compares ranking quality only. At the same k, FlyHash's codes are larger and slower to compare than SimHash's, and an HNSW index beats both at this scale. See the paper's Limitations. The embeddings here are TF-IDF with SVD (256 dimensions), so the text matching is cruder than a modern sentence model.</p>
+    <p>Source and data: github.com/mohanji/flyhash-agent-memory (<code>scripts/make_demo_data.py</code> regenerates the numbers on this page).</p>
+  </div>
+</div>
+
+<script>
+const D = __DATA__;
+const $ = id => document.getElementById(id);
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const COLS = D.grid[0], ROWS = D.grid[1], M = D.m, TOP = D.top;
+const state = {qi: 0, k: 32, step: 4, sel: 0, reveal: M, rowsShown: TOP, run: 0};
+
+// fixed shuffle so winning units light up scattered, not left to right
+const order = (() => { let s = 12345, a = Array.from({length: M}, (_, i) => i);
+  for (let i = M - 1; i > 0; i--) { s = (s * 1664525 + 1013904223) >>> 0; const j = s % (i + 1); [a[i], a[j]] = [a[j], a[i]]; }
+  return a; })();
+const rankInShuffle = new Int32Array(M); order.forEach((u, r) => rankInShuffle[u] = r);
+
+const STEPS = ["1  Embed", "2  Keep the top k", "3  Compare codes", "4  Rank"];
+function cssv(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+const cur = () => { const q = D.queries[state.qi], e = q.by_k[state.k]; return {q, e, fly: e.fly, sim: e.sim}; };
+
+function buildControls(){
+  $('qsel').innerHTML = D.queries.map((q, i) => `<option value="${i}">${q.text}</option>`).join('');
+  $('kseg').innerHTML = D.ks.map(k => `<button type="button" data-k="${k}" aria-pressed="${k===state.k}">${k}</button>`).join('');
+  $('steps').innerHTML = STEPS.map((s, i) => `<li><button type="button" data-step="${i+1}">${s}</button></li>`).join('');
+  $('qsel').onchange = e => { state.qi = +e.target.value; state.sel = 0; fullState(); };
+  $('kseg').onclick = e => { const b = e.target.closest('button'); if(!b) return; state.k = +b.dataset.k; state.sel = 0; fullState(); };
+  $('steps').onclick = e => { const b = e.target.closest('button'); if(!b) return; state.run++; goStep(+b.dataset.step); };
+  $('play').onclick = play;
+  $('next').onclick = () => { state.qi = (state.qi + 1) % D.queries.length; state.sel = 0; $('qsel').value = state.qi; fullState(); };
+}
+
+function fullState(){ state.run++; goStep(4); }
+function goStep(n){
+  state.step = n;
+  state.reveal = n >= 2 ? M : 0;
+  state.rowsShown = n >= 4 ? TOP : (n >= 3 ? 1 : 0);
+  render();
+}
+
+function statusText(){
+  const k = state.k, pct = (100 * k / M).toFixed(1);
+  return [
+    "The question becomes an embedding. Each of FlyHash's 2,000 units adds up a random tenth of its numbers. Every unit now has a level of activity.",
+    `Winner-take-all keeps the ${k} most active units (${pct}% of the pool) and ignores the other ${M - k}. SimHash keeps ${k} sign bits instead.`,
+    "Every stored memory has its own code. FlyHash counts shared active units, SimHash counts agreeing bits. Select a memory below to see its code against the question.",
+    "Memories are ranked by that count. A green tick means the benchmark labels that memory as a true answer."
+  ][state.step - 1];
+}
+
+function render(){
+  const {q, fly, sim} = cur(), k = state.k;
+  $('qtext').textContent = q.text;
+  $('status').textContent = statusText();
+  document.querySelectorAll('#steps button').forEach(b => b.setAttribute('aria-current', +b.dataset.step === state.step ? 'step' : 'false'));
+  document.querySelectorAll('#kseg button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.k === k));
+  $('glegend').innerHTML = `<span><i style="background:var(--fly)"></i>active for the question</span><span><i style="border:2px solid var(--fly)"></i>active for selected memory</span><span><i style="background:var(--fly);box-shadow:0 0 0 2px var(--ink) inset"></i>shared</span><span><i style="background:var(--omit);border:1px solid var(--line)"></i>ignored</span>`;
+  renderList('flylist', fly, 'var(--fly)');
+  renderList('simlist', sim, 'var(--sim)');
+  renderBits(sim);
+  drawGrid();
+  $('sk').textContent = k;
+  $('apf').textContent = fly.ap.toFixed(2); $('aps').textContent = sim.ap.toFixed(2);
+  $('rf').textContent = fly.relevant_ranks.join(', '); $('rs').textContent = sim.relevant_ranks.join(', ');
+  aggregate();
+}
+
+function renderList(id, m, color){
+  const k = state.k;
+  $(id).innerHTML = m.top.map((r, i) => {
+    const hidden = i >= state.rowsShown ? 'hidden' : '';
+    const unit = id === 'flylist' ? 'shared units' : 'agreeing bits';
+    return `<li><button type="button" class="row ${i===state.sel?'sel':''}" data-i="${i}" ${hidden}>
+      <span class="rank">${i+1}</span>
+      <span><span class="txt">${r.text}</span>
+        <span class="meter"><b style="width:${100*r.match/k}%;background:${color}"></b></span>
+        <span class="score">${r.match} of ${k} ${unit}</span></span>
+      <span class="mark ${r.rel?'y':'n'}" aria-label="${r.rel?'true answer':'not an answer'}">${r.rel?'✓':'·'}</span></button></li>`;
+  }).join('') + (state.step >= 4 && state.rowsShown >= TOP && !m.top.some(r => r.rel)
+    ? `<li class="none">None of the true answers are in the top ${TOP}. They sit at ranks ${m.relevant_ranks.join(', ')}.</li>` : '');
+  $(id).onclick = e => { const b = e.target.closest('button.row'); if(!b) return; state.sel = +b.dataset.i; render(); };
+}
+
+function renderBits(sim){
+  const k = state.k, per = Math.min(k, 32), chunks = Math.ceil(k / per);
+  const qb = sim.query_bits, mb = sim.top[state.sel].bits;
+  const row = (bits, s, e, cls) => `<div class="brow ${cls||''}" style="--n:${e-s}">${[...bits.slice(s, e)].map(b => `<span class="${b==='1'?'on':''}"></span>`).join('')}</div>`;
+  let h = '';
+  for (let c = 0; c < chunks; c++){
+    const s = c * per, e = Math.min(k, s + per);
+    const eq = [...qb.slice(s, e)].map((b, i) => `<span class="${b === mb[s+i] ? 'eq' : ''}"></span>`).join('');
+    h += `<div class="bchunk">${c===0?'<div class="bitlab">question</div>':''}${row(qb,s,e)}${c===0?'<div class="bitlab">selected memory (rank '+(state.sel+1)+')</div>':''}${row(mb,s,e)}<div class="brow match" style="--n:${e-s}">${eq}</div></div>`;
+  }
+  $('bits').innerHTML = state.step >= 2 ? h : '<div class="bitlab">Waiting for step 2.</div>';
+  $('bits').style.opacity = state.step >= 2 ? 1 : .5;
+}
+
+function drawGrid(){
+  const cv = $('grid'), dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, cell = w / COLS, h = cell * ROWS;
+  cv.style.height = h + 'px'; cv.width = w * dpr; cv.height = h * dpr;
+  const x = cv.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, w, h);
+  const {fly} = cur();
+  const qa = new Set(fly.query_active), ma = new Set(fly.top[state.sel].active);
+  const idle = cssv('--idle'), omit = cssv('--omit'), fc = cssv('--fly'), ink = cssv('--ink');
+  const s = cell * 0.74, off = (cell - s) / 2;
+  for (let u = 0; u < M; u++){
+    const cx = (u % COLS) * cell + off, cy = Math.floor(u / COLS) * cell + off;
+    const lit = state.step >= 2 && qa.has(u) && rankInShuffle[u] < state.reveal * 1;
+    const showMem = state.step >= 3 && ma.has(u);
+    x.beginPath(); x.roundRect ? x.roundRect(cx, cy, s, s, s * .25) : x.rect(cx, cy, s, s);
+    if (lit){ x.fillStyle = fc; x.fill(); if (showMem){ x.lineWidth = Math.max(1.5, s*.22); x.strokeStyle = ink; x.stroke(); } }
+    else if (state.step >= 2 && state.reveal >= M){ x.fillStyle = omit; x.fill(); if (showMem){ x.lineWidth = Math.max(1.5, s*.22); x.strokeStyle = fc; x.stroke(); } }
+    else { x.fillStyle = idle; x.fill(); }
+  }
+}
+
+function aggregate(){
+  const k = state.k, Q = D.queries;
+  let w = 0, l = 0, fa = 0, sa = 0;
+  Q.forEach(q => { const a = q.by_k[k].fly.ap, b = q.by_k[k].sim.ap; fa += a; sa += b; if (a > b) w++; else if (a < b) l++; });
+  const i = D.paper_map.k.indexOf(k);
+  $('agg').innerHTML = `<div>In this sample of ${Q.length} questions at k = ${k}, FlyHash ranks better on <b>${w}</b>, worse on <b>${l}</b>${Q.length-w-l?`, tied on ${Q.length-w-l}`:''}. Mean average precision: <b style="color:var(--fly)">${(fa/Q.length).toFixed(2)}</b> vs <b style="color:var(--sim)">${(sa/Q.length).toFixed(2)}</b>.</div>
+  <div class="cap" style="margin-top:6px">Full benchmark, 150 questions and 10 random seeds, k = ${k}: mAP <b style="color:var(--fly)">${D.paper_map.fly[i].toFixed(3)}</b> vs <b style="color:var(--sim)">${D.paper_map.sim[i].toFixed(3)}</b>. The gap narrows as k grows.</div>`;
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function play(){
+  const id = ++state.run;
+  if (reduce){ goStep(4); return; }
+  const alive = () => id === state.run;
+  state.sel = 0;
+  state.step = 1; state.reveal = 0; state.rowsShown = 0; render();
+  await sleep(1400); if(!alive()) return;
+  state.step = 2; render();
+  const t0 = performance.now(), dur = 1500;
+  await new Promise(res => { const tick = now => {
+      if(!alive()) return res();
+      const f = Math.min(1, (now - t0) / dur);
+      state.reveal = Math.max(1, Math.round(f * M)); drawGrid();
+      if (f < 1) requestAnimationFrame(tick); else res(); };
+    requestAnimationFrame(tick); });
+  if(!alive()) return;
+  state.reveal = M; render();
+  await sleep(1000); if(!alive()) return;
+  state.step = 3; state.rowsShown = 1; render();
+  await sleep(2200); if(!alive()) return;
+  state.step = 4;
+  for (let n = 2; n <= TOP; n++){ state.rowsShown = n; render(); await sleep(260); if(!alive()) return; }
+  state.rowsShown = TOP; render();
+}
+
+buildControls();
+addEventListener('resize', () => drawGrid());
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => drawGrid());
+new MutationObserver(() => drawGrid()).observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme']});
+render();
+</script>
+</body>
+</html>
