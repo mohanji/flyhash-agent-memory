@@ -30,7 +30,7 @@ compared against in the literature (`SimHash`, random-hyperplane LSH).
 ## Project layout
 
 ```
-RESEARCH_JOURNAL.md  Chronological account of issues faced, diagnoses, and fixes
+docs/RESEARCH_JOURNAL.md  Chronological account of issues faced, diagnoses, and fixes
 src/
   flyhash.py          FlyHash + SimHash implementations
   memory_store.py     Agent-memory-store wrapper (FlyHash-backed + FAISS baseline)

@@ -123,7 +123,7 @@ scripts/make_figures.py          regenerates docs/images/
 scripts/make_demo_data.py, build_demo.py   regenerate docs/demo.html
 docs/demo.html                   interactive ranking demo (open in a browser)
 docs/EXPERIMENT_LOG.md           full chronological experiment record
-RESEARCH_JOURNAL.md              development notes
+docs/RESEARCH_JOURNAL.md         development notes (setup and troubleshooting diary)
 ```
 
 ## Limitations and open directions
