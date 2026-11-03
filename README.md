@@ -1,5 +1,6 @@
 # FlyHash for LLM Agent Memory
 
+[![DOI](https://zenodo.org/badge/1379348078.svg)](https://doi.org/10.5281/zenodo.23903302)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 [![Reproducible](https://img.shields.io/badge/reproduce-REPRODUCING.md-0072B2)](REPRODUCING.md)
