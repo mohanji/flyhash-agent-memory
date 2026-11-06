@@ -1,12 +1,13 @@
 # FlyHash for LLM Agent Memory
 
 [![DOI](https://zenodo.org/badge/1379348078.svg)](https://doi.org/10.5281/zenodo.23903302)
+[![arXiv](https://img.shields.io/badge/arXiv-2611.05791-b31b1b.svg)](https://arxiv.org/abs/2611.05791)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 [![Reproducible](https://img.shields.io/badge/reproduce-REPRODUCING.md-0072B2)](REPRODUCING.md)
 
 Code, data and demo for the paper **"FlyHash for LLM Agent Memory: An Empirical Validation and a New Application"**
-by [Mohan Bheemadolu](https://github.com/mohanji) and Chrisogonas O. Odhiambo (Bheemadolu & Odhiambo, 2026).
+by [Mohan Bheemadolu](https://github.com/mohanji) and Chrisogonas O. Odhiambo ([arXiv:2611.05791](https://arxiv.org/abs/2611.05791)).
 
 FlyHash is a similarity-preserving hash modeled on the fruit fly's olfactory circuit (Dasgupta, Stevens & Navlakha,
 *Science* 2017). This repo re-implements it from scratch, validates it against SimHash under a fair, matched-bit
@@ -139,4 +140,20 @@ docs/RESEARCH_JOURNAL.md         development notes (setup and troubleshooting di
 
 ## Citation
 
-See [CITATION.cff](CITATION.cff). Licensed under the [MIT License](LICENSE).
+If you use this code, dataset or demo, please cite the paper:
+
+```bibtex
+@misc{bheemadolu2026flyhash,
+  title         = {FlyHash for LLM Agent Memory: An Empirical Validation and a New Application},
+  author        = {Bheemadolu, Mohan and Odhiambo, Chrisogonas O.},
+  year          = {2026},
+  eprint        = {2611.05791},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.AI},
+  doi           = {10.48550/arXiv.2611.05791},
+  url           = {https://arxiv.org/abs/2611.05791}
+}
+```
+
+The code and data release is archived on Zenodo: [10.5281/zenodo.23903302](https://doi.org/10.5281/zenodo.23903302).
+See also [CITATION.cff](CITATION.cff). Licensed under the [MIT License](LICENSE).
