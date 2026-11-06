@@ -5,6 +5,7 @@ authors:
   - family-names: Bheemadolu
     given-names: Mohan
     email: mohan.bmdl@gmail.com
+    orcid: "https://orcid.org/0009-0005-5730-2776"
   - family-names: Odhiambo
     given-names: Chrisogonas O.
     email: chrisogonas@gmail.com
@@ -18,6 +19,7 @@ preferred-citation:
   authors:
     - family-names: Bheemadolu
       given-names: Mohan
+      orcid: "https://orcid.org/0009-0005-5730-2776"
     - family-names: Odhiambo
       given-names: Chrisogonas O.
   journal: "arXiv preprint arXiv:2611.05791"
