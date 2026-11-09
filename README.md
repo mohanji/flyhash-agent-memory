@@ -40,6 +40,7 @@ strongest units (FlyHash) or k sign bits (SimHash), and ranks stored memories. T
 released benchmark, and the questions are a fixed random sample, so FlyHash loses some of them and the page shows that.
 
 - **Online:** [open the interactive demo](https://mohanji.github.io/flyhash-agent-memory/demo.html)
+- **Hugging Face Space:** [FlyHash vs SimHash retrieval demo](https://huggingface.co/spaces/pranamhan/flyhash-agent-memory-demo)
 - **Offline:** open `docs/demo.html` in any browser, no install needed.
 - **Regenerate:** `python scripts/make_demo_data.py && python scripts/build_demo.py`
 
@@ -97,6 +98,7 @@ Install the extras with `pip install -r requirements-optional.txt`. To try the i
 `datasets/agent_memory_v1/` is a labeled agent-memory retrieval benchmark: 6,000 memories (150 named personas x 10
 facts x 3-4 paraphrases), 150 questions, and ground-truth relevant memories for each question (about 4 per question).
 It is synthetic and deterministic, with no personal data. Format and regeneration: [REPRODUCING.md](REPRODUCING.md).
+Also on Hugging Face: [pranamhan/agent-memory-v1](https://huggingface.co/datasets/pranamhan/agent-memory-v1).
 
 ```json
 {"id": 12, "text": "Which language does Omar prefer to code in?", "relevant_memory_ids": [504, 505, 506, 507]}
