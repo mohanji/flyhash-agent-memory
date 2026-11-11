@@ -7,7 +7,7 @@
 [![Reproducible](https://img.shields.io/badge/reproduce-REPRODUCING.md-0072B2)](REPRODUCING.md)
 
 Code, data and demo for the paper **"FlyHash for LLM Agent Memory: An Empirical Validation and a New Application"**
-by [Mohan Bheemadolu](https://github.com/mohanji) and Chrisogonas O. Odhiambo ([arXiv:2611.05791](https://arxiv.org/abs/2611.05791)).
+by [Mohan Bheemadolu](https://github.com/mohanji) and [Chrisogonas O. Odhiambo](https://github.com/chrisogonas) ([arXiv:2611.05791](https://arxiv.org/abs/2611.05791)).
 
 FlyHash is a similarity-preserving hash modeled on the fruit fly's olfactory circuit (Dasgupta, Stevens & Navlakha,
 *Science* 2017). This repo re-implements it from scratch, validates it against SimHash under a fair, matched-bit
