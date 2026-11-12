@@ -10,21 +10,21 @@ Code, data and demo for the paper **"FlyHash for LLM Agent Memory: An Empirical 
 by [Mohan Bheemadolu](https://github.com/mohanji) and [Chrisogonas O. Odhiambo](https://github.com/chrisogonas) ([arXiv:2611.05791](https://arxiv.org/abs/2611.05791)).
 
 FlyHash is a similarity-preserving hash modeled on the fruit fly's olfactory circuit (Dasgupta, Stevens & Navlakha,
-*Science* 2017). This repo re-implements it from scratch, validates it against SimHash under a fair, matched-bit
+*Science* 2017). This repo re-implements it from scratch, validates it against SimHash under a fair, matched active-bit
 protocol, and applies it to retrieval of long-term memories for LLM agents.
 
 ![How FlyHash works](docs/images/pipeline.png)
 
 ## Key findings
 
-- **Better retrieval at the same bit budget.** FlyHash beats SimHash at every budget (k = 16 to 256) on five
+- **Better retrieval at the same active-bit budget.** FlyHash beats SimHash at every budget (k = 16 to 256) on five
   datasets: GloVe words, MiniLM sentences, Digits and MNIST images, and a labeled agent-memory benchmark. Every gap
   clears twice the combined standard deviation over 10 seeds.
 - **The advantage is largest where codes are shortest.** At k = 16 FlyHash is about 4 to 5x better on four of the five datasets (1.4x on MiniLM); at k = 256 it is
   1.1 to 1.5x better.
 - **Not a free lunch.** Compared densely, FlyHash's code is larger and slower than SimHash's. A sparse-set
   comparison recovers most of the speed gap but not the memory gap, and at 5,000 records HNSW beats both hashes on
-  quality and latency. FlyHash is a quality-per-bit result, not a speed or memory win. See the paper's Limitations.
+  quality and latency. FlyHash is a quality-per-active-bit result, not a speed or memory win: a FlyHash code takes more bytes than a SimHash code with the same number of active bits, so do not expect it to win at equal storage. See the paper's Limitations.
 - **A fair comparison matters.** An early version of this project "found" that FlyHash loses. The cause was a flawed
   comparison (equal total hash length instead of equal *active* bits), not the algorithm. The corrected protocol is
   described in the paper and in the [experiment log](docs/EXPERIMENT_LOG.md).
