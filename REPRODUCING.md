@@ -49,10 +49,35 @@ Regenerate it, or build variants, with `python src/export_dataset.py --help`.
 | End-to-end latency (`tab:e2e-latency`) | `python end_to_end_latency.py` | `sentence-transformers` |
 | HNSW systems comparison (`tab:hnsw`) | `python hnsw_systems_benchmark.py --dataset glove` | core only (+ GloVe) |
 | Weight-mode sensitivity (`tab:weight-mode`, Appendix A) | `python weight_sensitivity_benchmark.py --dataset glove --seeds 10` | as above |
+| Equal-storage control, labeled benchmark (`tab:labeled-storage`) | `python labeled_equal_storage.py --seeds 10 --bootstrap 2000` | core only |
+| LoCoMo evidence retrieval and equal-storage control (LoCoMo section) | `python locomo_recall.py --data ../data_external/locomo10.json --embedder minilm --bits 16 32 64 128 --extra-simhash-bits 256 512 1024 2000 --k 5 10 20 50 --boot-k 10 --seeds 10 --out locomo_recall_v2.csv` | LoCoMo download (section 4a), `sentence-transformers` |
 
 Exact numbers depend on library versions and hardware; latency and memory figures in
 particular vary by machine. Retrieval-quality numbers (mAP) are seeded and should match
 closely.
+
+### 4a. LoCoMo data (not included in this repository)
+
+LoCoMo (Maharana et al., 2024) is released under CC BY-NC, so this repository does not redistribute it.
+Download `locomo10.json` into the git-ignored `data_external/` folder:
+
+```bash
+mkdir -p data_external
+curl -L -o data_external/locomo10.json https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json
+# Windows PowerShell: Invoke-WebRequest -Uri "<same URL>" -OutFile "data_external\locomo10.json"
+```
+
+Expected load message: `10 conversations, 5882 turns, 1981 questions with usable evidence` (5 questions are skipped
+for missing or unmatched evidence). The paper's "all" column excludes the adversarial category (1,535 questions);
+change this with `--exclude-from-all`.
+
+`locomo_recall.py --embedder bow` runs offline with a hashed bag-of-words embedding. It is a smoke test only and its
+numbers are not meaningful. `--dump-contexts DIR` writes retrieved LoCoMo text, so keep that folder out of git
+(`.gitignore` already lists `contexts/` and `data_external/`).
+
+The result files are aggregate numbers only (`locomo_recall_v2.csv`, `locomo_recall_v2_bootstrap.csv`,
+`labeled_equal_storage.csv`, `labeled_equal_storage_bootstrap.csv`). The matched-bit rows of
+`labeled_equal_storage.py` reproduce `tab:realistic-benchmark` to within about 0.002 mAP.
 
 ## 5. The agent-memory demo
 
