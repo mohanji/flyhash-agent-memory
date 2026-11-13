@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Reproduces the paper's experiments. Usage: ./reproduce.sh [quick|full]
 #   quick: ~1-2 min sanity pass (2 seeds, small corpora)
-#   full : paper settings (10 seeds); GloVe tables need the GloVe download, and the LoCoMo run needs
-#          data_external/locomo10.json (see REPRODUCING.md)
+#   full : paper settings (10 seeds); GloVe tables need the GloVe download (see REPRODUCING.md)
+# v2 additions (appended below, v1 steps unchanged): equal-storage control; in full mode a LoCoMo run, which needs
+#   data_external/locomo10.json (REPRODUCING.md, section 4a)
 set -euo pipefail
 MODE="${1:-quick}"
 cd "$(dirname "$0")"

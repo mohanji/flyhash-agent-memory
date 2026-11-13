@@ -17,3 +17,8 @@ data/
 
 data_external/
 contexts/
+
+# v2 aggregate results (numbers only, no LoCoMo text) are tracked
+!results/
+!results/v2/
+!results/v2/*.csv

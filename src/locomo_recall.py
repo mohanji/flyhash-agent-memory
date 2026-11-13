@@ -139,6 +139,9 @@ def main():
     ap.add_argument("--out", default="locomo_recall.csv")
     ap.add_argument("--dump-contexts", help="folder: write top-k contexts (JSONL, seed 0) for sharing")
     ap.add_argument("--dump-k", type=int, default=10)
+    ap.add_argument("--dump-ids-only", action="store_true",
+                    help="dump only LoCoMo turn ids (dia_id), no dialogue text, so no CC BY-NC text is redistributed; "
+                         "the recipient maps ids to text with their own copy of locomo10.json")
     ap.add_argument("--print-k", type=int, help="k shown in the printed table (default: largest --k)")
     ap.add_argument("--category-names", help='JSON, e.g. \'{"1":"multi-hop","2":"temporal"}\'')
     ap.add_argument("--exclude-from-all", type=int, nargs="*", default=[5],
@@ -227,10 +230,14 @@ def main():
                     if fn not in dumps:
                         dumps[fn] = open(fn, "w", encoding="utf-8")
                     for qi, q in enumerate(qas):
-                        idx = sorted(R[qi, :a.dump_k].tolist())             # chronological order for a reader
-                        dumps[fn].write(json.dumps({"qid": q["qid"], "memories": [
-                            {"text": turns[i]["text"], "dia_id": turns[i]["dia_id"], "score": float(S[qi, i])}
-                            for i in idx]}) + "\n")
+                        rec = {"qid": q["qid"], "category": q["category"],
+                               "evidence_dia_ids": [turns[i]["dia_id"] for i in q["evidence"]],
+                               "ranked_dia_ids": [turns[i]["dia_id"] for i in R[qi, :a.dump_k].tolist()]}  # best first: top-5 = first 5
+                        if not a.dump_ids_only:
+                            idx = sorted(R[qi, :a.dump_k].tolist())         # chronological order for a reader
+                            rec["memories"] = [{"text": turns[i]["text"], "dia_id": turns[i]["dia_id"],
+                                                "score": float(S[qi, i])} for i in idx]
+                        dumps[fn].write(json.dumps(rec) + "\n")
         print(f"conversation {ci + 1}/{len(convs)} done ({c['sid']}, {len(turns)} turns, {len(qas)} questions)",
               file=sys.stderr)
     for f in dumps.values():
@@ -323,6 +330,54 @@ def main():
                       f"{r['diff']:+.3f} [{r['ci_lo']:+.3f}, {r['ci_hi']:+.3f}]  convs {r['convs_a_better']}/{r['n_convs']}")
             print("* CI = 95% percentile interval over questions (hash-seed variance already averaged out); "
                   "questions in one conversation are correlated, so read the conv count as a robustness check.")
+
+
+        # ---- per category: FlyHash recall as a share of dense recall (ratio of means), bootstrap within category.
+        # Categories are disjoint sets of questions, so their resamples are independent; the difference of two
+        # categories' shares is bootstrapped from those independent resamples.
+        crows, cat_ids = [], [c for c in sorted(cats) if c not in excl]
+        for cen in centers:
+            for k in [k for k in a.boot_k if k in a.k]:
+                dn = qrec.get((cen, "dense", 0, k))
+                if dn is None:
+                    continue
+                for b in fly_all:
+                    fl = qrec.get((cen, "flyhash", b, k))
+                    if fl is None:
+                        continue
+                    shares = {}
+                    for c in cat_ids:
+                        idx = np.where(qcat == c)[0]
+                        bi = brng.integers(0, len(idx), (a.bootstrap, len(idx)))
+                        s = fl[idx][bi].mean(axis=1) / np.maximum(dn[idx][bi].mean(axis=1), 1e-12)
+                        shares[c] = s
+                        lo, hi = np.percentile(s, [2.5, 97.5])
+                        crows.append({"centered": cen, "k": k, "bits": b, "category": names.get(c, str(c)),
+                                      "flyhash": fl[idx].mean(), "dense": dn[idx].mean(),
+                                      "share_of_dense": fl[idx].mean() / dn[idx].mean(), "ci_lo": lo, "ci_hi": hi,
+                                      "n_questions": len(idx)})
+                    ref = 4 if 4 in shares else None
+                    for c in cat_ids:
+                        if ref is None or c == ref:
+                            continue
+                        d = shares[c] - shares[ref]
+                        lo, hi = np.percentile(d, [2.5, 97.5])
+                        crows.append({"centered": cen, "k": k, "bits": b,
+                                      "category": f"{names.get(c, c)} minus {names.get(ref, ref)} (share of dense)",
+                                      "share_of_dense": d.mean(), "ci_lo": lo, "ci_hi": hi})
+        if crows:
+            cout = Path(a.out).with_name(Path(a.out).stem + "_percat_bootstrap.csv")
+            cols = ["centered", "k", "bits", "category", "flyhash", "dense", "share_of_dense", "ci_lo", "ci_hi", "n_questions"]
+            with open(cout, "w", newline="", encoding="utf-8") as f:
+                w = csv.DictWriter(f, fieldnames=cols)
+                w.writeheader()
+                w.writerows(crows)
+            print(f"\nwrote {cout}")
+            print("\n=== FlyHash recall as a share of dense recall, by category (95% bootstrap interval within category) ===")
+            for r in crows:
+                if r["centered"]:
+                    print(f"k={r['k']:<3} {r['bits']:>4} active bits  {r['category']:<42} "
+                          f"{r['share_of_dense']:.3f} [{r['ci_lo']:.3f}, {r['ci_hi']:.3f}]")
 
 
 if __name__ == "__main__":
